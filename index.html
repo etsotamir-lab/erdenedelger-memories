@@ -33,7 +33,7 @@ button{font:inherit;color:inherit;cursor:pointer}.intro{min-height:100svh;displa
 .start.hidden{opacity:0;pointer-events:none}.start button{background:#d4b47b;color:#1a100b;border:0;border-radius:30px;padding:15px 28px;letter-spacing:2px;font-size:11px;font-weight:700;box-shadow:0 0 40px #d4b47b55}
 .start p{font-family:'Cormorant Garamond',serif;font-size:clamp(25px,5vw,42px);text-align:center;margin:0 0 20px}
 section{padding:100px 7vw;max-width:1200px;margin:auto}.eyebrow{font-size:10px;letter-spacing:4px;color:var(--gold);text-transform:uppercase}.section-title{font:500 clamp(36px,6vw,68px) 'Cormorant Garamond',serif;margin:12px 0 35px}
-.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.photo{background:#e9e1d2;padding:9px 9px 30px;transform:rotate(var(--r));box-shadow:0 15px 35px #0008;cursor:pointer;transition:.35s}.photo:hover{transform:translateY(-8px) rotate(0) scale(1.02)}.photo img{width:100%;height:260px;object-fit:cover;display:block;filter:sepia(.12)}.photo span{display:block;color:#34261e;font:italic 17px 'Cormorant Garamond',serif;padding-top:8px;text-align:center}
+.gallery{display:flex;gap:22px;overflow-x:auto;overflow-y:hidden;padding:22px 12px 35px;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#a98b5e #241711;-webkit-overflow-scrolling:touch;cursor:grab;user-select:none}.gallery:active{cursor:grabbing}.gallery::-webkit-scrollbar{height:8px}.gallery::-webkit-scrollbar-track{background:#241711;border-radius:10px}.gallery::-webkit-scrollbar-thumb{background:#a98b5e;border-radius:10px}.photo{background:#e9e1d2;padding:9px 9px 30px;transform:rotate(var(--r));box-shadow:0 15px 35px #0008;cursor:pointer;transition:transform .35s;flex:0 0 clamp(220px,29vw,340px);scroll-snap-align:center}.photo:hover{transform:translateY(-8px) rotate(0) scale(1.02)}.photo img{width:100%;height:260px;object-fit:cover;display:block;filter:sepia(.12)}.photo span{display:block;color:#34261e;font:italic 17px 'Cormorant Garamond',serif;padding-top:8px;text-align:center}
 .music-section{text-align:center;border-top:1px solid #ffffff18;border-bottom:1px solid #ffffff18}.music-btn{border:1px solid #a98b5e;background:transparent;border-radius:40px;padding:14px 22px;color:var(--cream);letter-spacing:1px}
 .letter-area{text-align:center;padding-bottom:130px}.envelope{width:min(360px,82vw);height:220px;margin:45px auto 20px;position:relative;background:#c8a879;cursor:pointer;box-shadow:0 20px 50px #0008;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}
 .envelope:before{content:"";position:absolute;inset:0;background:#dfc69e;clip-path:polygon(0 0,50% 58%,100% 0)}.envelope:after{content:"";position:absolute;inset:0;background:#b38c5c;clip-path:polygon(0 100%,50% 48%,100% 100%)}
@@ -42,7 +42,7 @@ section{padding:100px 7vw;max-width:1200px;margin:auto}.eyebrow{font-size:10px;l
 .letter.open{display:block;animation:unfold .9s ease}@keyframes unfold{from{opacity:0;transform:translateY(20px) scaleY(.8)}to{opacity:1;transform:none}}
 footer{text-align:center;padding:35px;color:#a99172;font-size:10px;letter-spacing:3px}
 .lightbox{display:none;position:fixed;inset:0;background:#000e;z-index:10;place-items:center;padding:20px}.lightbox.show{display:grid}.lightbox img{max-width:90vw;max-height:85vh;border:10px solid #eee2d0}.lightbox button{position:absolute;top:20px;right:25px;background:none;border:0;font-size:32px}
-@media(max-width:700px){.screen{height:260px}.polaroid{height:190px}.record{width:220px;left:-100px;bottom:-70px}.gallery{grid-template-columns:repeat(2,1fr)}.photo img{height:190px}section{padding:75px 6vw}}
+@media(max-width:700px){.screen{height:260px}.polaroid{height:190px}.record{width:220px;left:-100px;bottom:-70px}.gallery{gap:15px;padding-left:8px;padding-right:8px}.photo{flex-basis:78vw}.photo img{height:190px}section{padding:75px 6vw}}
 @media(max-width:420px){.screen{height:220px}.polaroid{height:155px}.gallery{gap:12px}.photo{padding:6px 6px 23px}.photo img{height:150px}}
 </style></head>
 <body>
@@ -89,6 +89,27 @@ function makePolaroid(src,i){let d=document.createElement('div');d.className='po
 function showSlides(){slides.innerHTML='';for(let k=0;k<3;k++){let i=(current+k)%photos.length;slides.append(makePolaroid(photos[i],i))}current=(current+1)%photos.length}
 showSlides();setInterval(showSlides,3200);
 photos.forEach((src,i)=>{let d=document.createElement('div');d.className='photo';d.style.setProperty('--r',`${(i%2?1:-1)*(i%3+1)}deg`);let im=document.createElement('img');im.src=src;im.alt='Дурсамж '+(i+1);let cap=document.createElement('span');cap.textContent='Нандин дурсамж №'+String(i+1).padStart(2,'0');d.append(im,cap);d.onclick=()=>{document.getElementById('big').src=src;document.getElementById('lightbox').classList.add('show')};gallery.append(d)});
+// Галерейг автоматаар гүйлгэх бөгөөд хэрэглэгч гараар удирдахад түр зогсоно.
+let galleryTimer=null, resumeTimer=null, isGalleryInteracting=false;
+function stopGalleryAuto(){isGalleryInteracting=true;clearInterval(galleryTimer);clearTimeout(resumeTimer);}
+function startGalleryAuto(){clearInterval(galleryTimer);galleryTimer=setInterval(()=>{
+  if(isGalleryInteracting)return;
+  const first=gallery.querySelector('.photo');if(!first)return;
+  const step=first.getBoundingClientRect().width+22;
+  const atEnd=gallery.scrollLeft+gallery.clientWidth>=gallery.scrollWidth-8;
+  gallery.scrollTo({left:atEnd?0:gallery.scrollLeft+step,behavior:'smooth'});
+},3200);}
+function resumeGallery(){clearTimeout(resumeTimer);resumeTimer=setTimeout(()=>{isGalleryInteracting=false;},4500);}
+['pointerdown','touchstart','wheel','keydown'].forEach(evt=>gallery.addEventListener(evt,()=>{stopGalleryAuto();resumeGallery();},{passive:true}));
+let dragStartX=0,dragScrollLeft=0,isDragging=false,draggedFar=false;
+gallery.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')return;isDragging=true;draggedFar=false;dragStartX=e.clientX;dragScrollLeft=gallery.scrollLeft;gallery.setPointerCapture(e.pointerId);});
+gallery.addEventListener('pointermove',e=>{if(!isDragging)return;const dx=e.clientX-dragStartX;if(Math.abs(dx)>5)draggedFar=true;if(draggedFar){gallery.scrollLeft=dragScrollLeft-dx;e.preventDefault();}});
+gallery.addEventListener('click',e=>{if(draggedFar){e.preventDefault();e.stopPropagation();draggedFar=false;}},true);
+gallery.addEventListener('pointerup',()=>{isDragging=false;resumeGallery();});
+gallery.addEventListener('pointercancel',()=>{isDragging=false;resumeGallery();});
+gallery.addEventListener('touchend',resumeGallery,{passive:true});
+gallery.addEventListener('wheel',resumeGallery,{passive:true});
+startGalleryAuto();
 const song=document.getElementById('song');document.getElementById('begin').onclick=async()=>{document.getElementById('start').classList.add('hidden');try{await song.play()}catch(e){}};
 document.getElementById('pause').onclick=()=>song.paused?song.play():song.pause();
 document.getElementById('musicToggle').onclick=()=>song.paused?song.play():song.pause();
