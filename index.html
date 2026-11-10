@@ -15,7 +15,7 @@ button{font:inherit;color:inherit;cursor:pointer}.intro{min-height:100svh;displa
 .tv{background:linear-gradient(145deg,#49352a,#241711 55%,#100b09);border:1px solid #8b6b51;border-radius:30px;padding:17px 17px 13px;box-shadow:0 35px 100px #000b,inset 0 1px #ffffff24}
 .screen{height:315px;background:#090909;border:9px solid #201713;border-radius:22px;overflow:hidden;position:relative;box-shadow:inset 0 0 35px #000}
 .screen:after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,#fff0 0 3px,#fff1 4px);opacity:.35}
-.slides{height:100%;display:flex;align-items:center;gap:14px;padding:25px;width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-behavior:smooth;touch-action:pan-x;cursor:grab;user-select:none}.slides::-webkit-scrollbar{display:none}.slides:active{cursor:grabbing}
+.slides{height:100%;display:flex;align-items:center;justify-content:flex-start;gap:14px;padding:25px;width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-behavior:auto;touch-action:pan-x;cursor:grab;user-select:none;overscroll-behavior-x:contain}.slides::-webkit-scrollbar{display:none}.slides:active{cursor:grabbing}
 .polaroid{flex:0 0 43%;height:235px;background:#e9e1d2;padding:9px 9px 30px;box-shadow:0 12px 24px #0009;transform:rotate(-3deg);transition:opacity .7s,transform .7s}
 .polaroid:nth-child(2){transform:rotate(3deg)}.polaroid img{width:100%;height:100%;object-fit:cover;filter:sepia(.16) contrast(.95)}
 .tv-controls{height:57px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;color:#d6b37a}
@@ -86,63 +86,89 @@ const photos=["photo-01.jpg", "photo-02.jpg", "photo-03.jpg", "photo-04.jpg", "p
 const slides=document.getElementById('slides'),gallery=document.getElementById('gallery');
 let current=0;
 function makePolaroid(src,i){let d=document.createElement('div');d.className='polaroid';let im=document.createElement('img');im.src=src;im.alt='Дурсамж';d.append(im);return d}
-// Дээд талын ТВ доторх зургууд автоматаар хажуу тийш гулсана.
-// Хэрэглэгч хулганаар чирэх эсвэл утсаар хуруугаараа гүйлгэж болно.
+// Зөвхөн дээд талын ТВ доторх зургууд автоматаар жигд гулгана.
+ // Хэрэглэгч хулганаар чирэх, утсаар хуруугаараа гүйлгэхэд удирдлага хэрэглэгчид шилжинэ.
 photos.forEach((src,i)=>slides.append(makePolaroid(src,i)));
-let topTimer=null, topResume=null, topDragging=false, topStartX=0, topStartScroll=0, topMoved=false;
-function stopTopAuto(){clearInterval(topTimer);clearTimeout(topResume);}
-function startTopAuto(){
-  clearInterval(topTimer);
-  topTimer=setInterval(()=>{
-    if(topDragging)return;
-    const item=slides.querySelector('.polaroid');
-    if(!item)return;
-    const gap=14;
-    const step=item.getBoundingClientRect().width+gap;
-    const end=slides.scrollLeft+slides.clientWidth>=slides.scrollWidth-8;
-    slides.scrollTo({left:end?0:slides.scrollLeft+step,behavior:'smooth'});
-  },3200);
+
+// Давталт тасрахгүй харагдахын тулд эхний зургуудын хуулбарыг залгана.
+const originalSlides = Array.from(slides.children);
+originalSlides.forEach(node => slides.append(node.cloneNode(true)));
+
+let topPaused = false;
+let topDragging = false;
+let topMoved = false;
+let topStartX = 0;
+let topStartScroll = 0;
+let topResumeTimer = null;
+let topLastFrame = 0;
+let topAnimationFrame = null;
+const topSpeed = 24; // пиксел/секунд — удаан, жигд хөдөлгөөн
+
+function pauseTopCarousel() {
+  topPaused = true;
+  clearTimeout(topResumeTimer);
 }
-function resumeTopAuto(){clearTimeout(topResume);topResume=setTimeout(startTopAuto,4500);}
-slides.addEventListener('pointerdown',e=>{
-  stopTopAuto();
-  if(e.pointerType==='mouse'){topDragging=true;topMoved=false;topStartX=e.clientX;topStartScroll=slides.scrollLeft;slides.setPointerCapture(e.pointerId);}
+function resumeTopCarouselSoon() {
+  clearTimeout(topResumeTimer);
+  topResumeTimer = setTimeout(() => {
+    topPaused = false;
+    topLastFrame = 0;
+  }, 3500);
+}
+function animateTopCarousel(timestamp) {
+  if (!topAnimationFrame) return;
+  if (!topPaused && !topDragging) {
+    if (topLastFrame) {
+      const delta = Math.min((timestamp - topLastFrame) / 1000, 0.05);
+      const halfWidth = slides.scrollWidth / 2;
+      slides.scrollLeft += topSpeed * delta;
+      if (slides.scrollLeft >= halfWidth) slides.scrollLeft -= halfWidth;
+    }
+  }
+  topLastFrame = timestamp;
+  topAnimationFrame = requestAnimationFrame(animateTopCarousel);
+}
+topAnimationFrame = requestAnimationFrame(animateTopCarousel);
+
+slides.addEventListener('pointerdown', e => {
+  pauseTopCarousel();
+  if (e.pointerType === 'mouse') {
+    topDragging = true;
+    topMoved = false;
+    topStartX = e.clientX;
+    topStartScroll = slides.scrollLeft;
+    slides.setPointerCapture(e.pointerId);
+  }
 });
-slides.addEventListener('pointermove',e=>{
-  if(!topDragging)return;
-  const dx=e.clientX-topStartX;
-  if(Math.abs(dx)>5)topMoved=true;
-  if(topMoved){slides.scrollLeft=topStartScroll-dx;e.preventDefault();}
+slides.addEventListener('pointermove', e => {
+  if (!topDragging) return;
+  const dx = e.clientX - topStartX;
+  if (Math.abs(dx) > 4) topMoved = true;
+  if (topMoved) {
+    slides.scrollLeft = topStartScroll - dx;
+    e.preventDefault();
+  }
 });
-slides.addEventListener('pointerup',()=>{topDragging=false;resumeTopAuto();});
-slides.addEventListener('pointercancel',()=>{topDragging=false;resumeTopAuto();});
-slides.addEventListener('touchstart',stopTopAuto,{passive:true});
-slides.addEventListener('touchend',resumeTopAuto,{passive:true});
-slides.addEventListener('wheel',()=>{stopTopAuto();resumeTopAuto();},{passive:true});
-slides.addEventListener('click',e=>{if(topMoved){e.preventDefault();e.stopPropagation();topMoved=false;}},true);
-startTopAuto();
-photos.forEach((src,i)=>{let d=document.createElement('div');d.className='photo';d.style.setProperty('--r',`${(i%2?1:-1)*(i%3+1)}deg`);let im=document.createElement('img');im.src=src;im.alt='Дурсамж '+(i+1);let cap=document.createElement('span');cap.textContent='Нандин дурсамж №'+String(i+1).padStart(2,'0');d.append(im,cap);d.onclick=()=>{document.getElementById('big').src=src;document.getElementById('lightbox').classList.add('show')};gallery.append(d)});
-// Галерейг автоматаар гүйлгэх бөгөөд хэрэглэгч гараар удирдахад түр зогсоно.
-let galleryTimer=null, resumeTimer=null, isGalleryInteracting=false;
-function stopGalleryAuto(){isGalleryInteracting=true;clearInterval(galleryTimer);clearTimeout(resumeTimer);}
-function startGalleryAuto(){clearInterval(galleryTimer);galleryTimer=setInterval(()=>{
-  if(isGalleryInteracting)return;
-  const first=gallery.querySelector('.photo');if(!first)return;
-  const step=first.getBoundingClientRect().width+22;
-  const atEnd=gallery.scrollLeft+gallery.clientWidth>=gallery.scrollWidth-8;
-  gallery.scrollTo({left:atEnd?0:gallery.scrollLeft+step,behavior:'smooth'});
-},3200);}
-function resumeGallery(){clearTimeout(resumeTimer);resumeTimer=setTimeout(()=>{isGalleryInteracting=false;},4500);}
-['pointerdown','touchstart','wheel','keydown'].forEach(evt=>gallery.addEventListener(evt,()=>{stopGalleryAuto();resumeGallery();},{passive:true}));
-let dragStartX=0,dragScrollLeft=0,isDragging=false,draggedFar=false;
-gallery.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')return;isDragging=true;draggedFar=false;dragStartX=e.clientX;dragScrollLeft=gallery.scrollLeft;gallery.setPointerCapture(e.pointerId);});
-gallery.addEventListener('pointermove',e=>{if(!isDragging)return;const dx=e.clientX-dragStartX;if(Math.abs(dx)>5)draggedFar=true;if(draggedFar){gallery.scrollLeft=dragScrollLeft-dx;e.preventDefault();}});
-gallery.addEventListener('click',e=>{if(draggedFar){e.preventDefault();e.stopPropagation();draggedFar=false;}},true);
-gallery.addEventListener('pointerup',()=>{isDragging=false;resumeGallery();});
-gallery.addEventListener('pointercancel',()=>{isDragging=false;resumeGallery();});
-gallery.addEventListener('touchend',resumeGallery,{passive:true});
-gallery.addEventListener('wheel',resumeGallery,{passive:true});
-startGalleryAuto();
+function finishTopDrag() {
+  topDragging = false;
+  resumeTopCarouselSoon();
+}
+slides.addEventListener('pointerup', finishTopDrag);
+slides.addEventListener('pointercancel', finishTopDrag);
+slides.addEventListener('touchstart', pauseTopCarousel, {passive:true});
+slides.addEventListener('touchend', resumeTopCarouselSoon, {passive:true});
+slides.addEventListener('wheel', () => {
+  pauseTopCarousel();
+  resumeTopCarouselSoon();
+}, {passive:true});
+slides.addEventListener('click', e => {
+  if (topMoved) {
+    e.preventDefault();
+    e.stopPropagation();
+    topMoved = false;
+  }
+}, true);
+
 const song=document.getElementById('song');document.getElementById('begin').onclick=async()=>{document.getElementById('start').classList.add('hidden');try{await song.play()}catch(e){}};
 document.getElementById('pause').onclick=()=>song.paused?song.play():song.pause();
 document.getElementById('musicToggle').onclick=()=>song.paused?song.play():song.pause();
